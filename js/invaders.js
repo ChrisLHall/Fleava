@@ -8,8 +8,9 @@ function preload() {
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
     game.load.spritesheet('kaboom', 'assets/img/explode.png', 128, 128);
-    game.load.image('starfield', 'assets/img/starfield.png');
-    game.load.image('background', 'assets/img/background2.png');
+    game.load.image('midbg', 'assets/img/midbg.png');
+    game.load.image('bg', 'assets/img/bg.png');
+    game.load.image('hud', 'assets/img/hud.png');
 
     game.load.audio('explosion', 'assets/sfx/explosion.mp3');
     game.load.audio('blaster', 'assets/sfx/blaster.mp3');
@@ -22,7 +23,9 @@ var bulletTime = 0;
 var cursors;
 var fireButton;
 var explosions;
-var starfield;
+var bg;
+var midbg;
+var hud;
 var score = 0;
 var scoreString = '';
 var scoreText;
@@ -42,12 +45,14 @@ function create() {
 
     // enable crisp rendering
     game.renderer.renderSession.roundPixels = true;  
-    Phaser.Canvas.setImageRenderingCrisp(this.game.canvas)  
+    Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
 
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
     //  The scrolling starfield background
-    starfield = game.add.tileSprite(0, 0, 800, 600, 'starfield');
+    bg = game.add.sprite(0, 0, 'bg');
+    midbg = game.add.tileSprite(0, 0, 320, 144, 'midbg');
+    hud = game.add.sprite(0, 0, 'hud');
 
     //  Our bullet group
     bullets = game.add.group();
@@ -157,7 +162,7 @@ function descend() {
 function update() {
 
     //  Scroll the background
-    starfield.tilePosition.y += 2;
+    midbg.tilePosition.x += 1;
 
     if (player.alive)
     {
