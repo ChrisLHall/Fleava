@@ -7,16 +7,24 @@ function preload() {
     game.load.image('enemyBullet', 'assets/img/enemy-bullet.png');
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
+    game.load.spritesheet('flea', 'assets/img/flea.png', 16, 33);
+    //game.load.spritesheet('flea_hop', 'assets/img/flea_small_hop.png', 16, 33);
     game.load.spritesheet('kaboom', 'assets/img/explode.png', 128, 128);
-    game.load.image('midbg', 'assets/img/midbg.png');
-    game.load.image('bg', 'assets/img/bg.png');
-    game.load.image('hud', 'assets/img/hud.png');
+    game.load.image('midbg', 'assets/img/terrain1.png');
+    game.load.image('bg', 'assets/img/background1.png');
+    game.load.image('hud', 'assets/img/frame1.png');
 
     game.load.audio('explosion', 'assets/sfx/explosion.mp3');
     game.load.audio('blaster', 'assets/sfx/blaster.mp3');
 }
 
 var player;
+var PLAYER_SPEED = 150;
+var PLAYER_GRAVITY = 600;
+var PLAYER_ACCEL = 40;
+var PLAYER_FRIC = 0.8;
+var FLOOR_Y = 76;
+var BOUND_X = 10;
 var aliens;
 var bullets;
 var bulletTime = 0;
@@ -28,11 +36,8 @@ var midbg;
 var hud;
 var score = 0;
 var scoreString = '';
-var scoreText;
-var lives;
 var enemyBullet;
 var firingTimer = 0;
-var stateText;
 var livingEnemies = [];
 
 var explosionSnd;
@@ -51,7 +56,7 @@ function create() {
 
     //  The scrolling starfield background
     bg = game.add.sprite(0, 0, 'bg');
-    midbg = game.add.tileSprite(0, 0, 320, 144, 'midbg');
+    midbg = game.add.sprite(0, 0, 'midbg');
     hud = game.add.sprite(0, 0, 'hud');
 
     //  Our bullet group
@@ -75,40 +80,22 @@ function create() {
     enemyBullets.setAll('checkWorldBounds', true);
 
     //  The hero!
-    player = game.add.sprite(400, 500, 'ship');
-    player.anchor.setTo(0.5, 0.5);
+    player = game.add.sprite(30, FLOOR_Y, 'flea');
+    player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
+    player.animations.add('idle', [7, 8, 9], 10, true);
+    player.animations.play('idle');
     game.physics.enable(player, Phaser.Physics.ARCADE);
+    player.inAir = false;
 
     //  The baddies!
     aliens = game.add.group();
     aliens.enableBody = true;
     aliens.physicsBodyType = Phaser.Physics.ARCADE;
 
-    createAliens();
+    //createAliens();
 
     explosionSnd = game.add.audio('explosion');
     blasterSnd = game.add.audio('blaster');
-
-    //  The score
-    scoreString = 'Score : ';
-    scoreText = game.add.text(10, 10, scoreString + score, { font: '34px Arial', fill: '#fff' });
-
-    //  Lives
-    lives = game.add.group();
-    game.add.text(game.world.width - 100, 10, 'Lives : ', { font: '34px Arial', fill: '#fff' });
-
-    //  Text
-    stateText = game.add.text(game.world.centerX,game.world.centerY,' ', { font: '84px Arial', fill: '#fff' });
-    stateText.anchor.setTo(0.5, 0.5);
-    stateText.visible = false;
-
-    for (var i = 0; i < 3; i++) 
-    {
-        var ship = lives.create(game.world.width - 100 + (30 * i), 60, 'ship');
-        ship.anchor.setTo(0.5, 0.5);
-        ship.angle = 90;
-        ship.alpha = 0.4;
-    }
 
     //  An explosion pool
     explosions = game.add.group();
@@ -160,39 +147,62 @@ function descend() {
 }
 
 function update() {
-
-    //  Scroll the background
-    midbg.tilePosition.x += 1;
-
-    if (player.alive)
-    {
-        //  Reset the player, then check for movement keys
-        player.body.velocity.setTo(0, 0);
-
-        if (cursors.left.isDown)
-        {
-            player.body.velocity.x = -200;
-        }
-        else if (cursors.right.isDown)
-        {
-            player.body.velocity.x = 200;
-        }
-
-        //  Firing?
-        if (fireButton.isDown)
-        {
-            fireBullet();
-        }
-
-        if (game.time.now > firingTimer)
-        {
-            enemyFires();
-        }
-
-        //  Run collision
-        game.physics.arcade.overlap(bullets, aliens, collisionHandler, null, this);
-        game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer, null, this);
+  if (player.alive)
+  {
+    if (player.inAir) {
+      player.body.gravity.y = PLAYER_GRAVITY;
+      if (player.body.y > FLOOR_Y) {
+        player.body.gravity.y = 0;
+        player.body.y = FLOOR_Y;
+        player.inAir = false;
+      }
+    } else {
+      player.body.gravity.y = 0;
+      player.body.y = FLOOR_Y;
     }
+
+    if (cursors.left.isDown && !cursors.right.isDown)
+    {
+      player.body.velocity.x = Math.max(-PLAYER_SPEED, player.body.velocity.x - PLAYER_ACCEL);
+    }
+    else if (cursors.right.isDown && !cursors.left.isDown)
+    {
+      player.body.velocity.x = Math.min(PLAYER_SPEED, player.body.velocity.x + PLAYER_ACCEL);
+    } else {
+      player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
+    }
+    if (!player.inAir && cursors.up.isDown) {
+      player.body.velocity.y = -200;
+      player.inAir = true;
+      player.animations.play("hop").onComplete.addOnce(function () {
+        player.animations.play("idle");
+      });
+    }
+
+    if (player.body.x < BOUND_X) {
+      player.body.x = BOUND_X;
+      player.body.velocity.x = Math.max(0, player.body.velocity.x);
+    } else if (player.body.x > 144 - BOUND_X) {
+      player.body.x = 144 - BOUND_X;
+      // want negative velocity
+      player.body.velocity.x = Math.min(0, player.body.velocity.x);
+    }
+
+    //  Firing?
+    if (fireButton.isDown)
+    {
+        fireBullet();
+    }
+
+    if (game.time.now > firingTimer)
+    {
+        enemyFires();
+    }
+
+    //  Run collision
+    game.physics.arcade.overlap(bullets, aliens, collisionHandler, null, this);
+    game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer, null, this);
+  }
 
 }
 
@@ -213,7 +223,6 @@ function collisionHandler (bullet, alien) {
 
     //  Increase the score
     score += 20;
-    scoreText.text = scoreString + score;
 
     //  And create an explosion :)
     var explosion = explosions.getFirstExists(false);
@@ -223,12 +232,8 @@ function collisionHandler (bullet, alien) {
 
     if (aliens.countLiving() == 0)
     {
-        score += 1000;
-        scoreText.text = scoreString + score;
 
         enemyBullets.callAll('kill',this);
-        stateText.text = " You Won, \n Click to restart";
-        stateText.visible = true;
 
         //the "click to restart" handler
         game.input.onTap.addOnce(restart,this);
@@ -240,8 +245,6 @@ function enemyHitsPlayer (player,bullet) {
     
     bullet.kill();
 
-    live = lives.getFirstAlive();
-
     if (live)
     {
         live.kill();
@@ -252,18 +255,7 @@ function enemyHitsPlayer (player,bullet) {
     explosion.reset(player.body.x, player.body.y);
     explosion.play('kaboom', 30, false, true);
 
-    // When the player dies
-    if (lives.countLiving() < 1)
-    {
-        player.kill();
-        enemyBullets.callAll('kill');
-
-        stateText.text=" GAME OVER \n Click to restart";
-        stateText.visible = true;
-
-        //the "click to restart" handler
-        game.input.onTap.addOnce(restart,this);
-    }
+    
 
 }
 
@@ -328,15 +320,11 @@ function restart () {
 
     //  A new level starts
     
-    //resets the life count
-    lives.callAll('revive');
     //  And brings the aliens back from the dead :)
     aliens.removeAll();
     createAliens();
 
     //revives the player
     player.revive();
-    //hides the text
-    stateText.visible = false;
 
 }
