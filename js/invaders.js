@@ -4,6 +4,7 @@ var game = new Phaser.Game(160, 144, Phaser.AUTO, 'phaser-example', { preload: p
 function preload() {
 
     game.load.image('bullet', 'assets/img/bullet.png');
+    game.load.spritesheet('jump_target', 'assets/img/target.png', 18, 19);
     game.load.image('enemyBullet', 'assets/img/enemy-bullet.png');
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
@@ -22,14 +23,17 @@ var player;
 var PLAYER_SPEED = 150;
 var PLAYER_GRAVITY = 600;
 var PLAYER_ACCEL = 40;
+var TARGET_ACCEL = 20;
 var PLAYER_FRIC = 0.8;
+var TARGET_FRIC = 0.92;
 var FLOOR_Y = 76;
 var BOUND_X = 10;
+var playerJumpTarget = null;
 var aliens;
 var bullets;
 var bulletTime = 0;
 var cursors;
-var fireButton;
+var aButton;
 var explosions;
 var bg;
 var midbg;
@@ -44,68 +48,70 @@ var explosionSnd;
 var blasterSnd;
 
 function create() {
-    // scale the game 4x
-    game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;  
-    game.scale.setUserScale(3, 3);
+  // scale the game 4x
+  game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;  
+  game.scale.setUserScale(3, 3);
 
-    // enable crisp rendering
-    game.renderer.renderSession.roundPixels = true;  
-    Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
+  // enable crisp rendering
+  game.renderer.renderSession.roundPixels = true;  
+  Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
 
-    game.physics.startSystem(Phaser.Physics.ARCADE);
+  game.physics.startSystem(Phaser.Physics.ARCADE);
+  bg = game.add.sprite(0, 0, 'bg');
+  midbg = game.add.sprite(0, 0, 'midbg');
+  hud = game.add.sprite(0, 0, 'hud');
+  createPlatformZone();
+}
 
-    //  The scrolling starfield background
-    bg = game.add.sprite(0, 0, 'bg');
-    midbg = game.add.sprite(0, 0, 'midbg');
-    hud = game.add.sprite(0, 0, 'hud');
+function createPlatformZone () {
 
-    //  Our bullet group
-    bullets = game.add.group();
-    bullets.enableBody = true;
-    bullets.physicsBodyType = Phaser.Physics.ARCADE;
-    bullets.createMultiple(30, 'bullet');
-    bullets.setAll('anchor.x', 0.5);
-    bullets.setAll('anchor.y', 1);
-    bullets.setAll('outOfBoundsKill', true);
-    bullets.setAll('checkWorldBounds', true);
+  //  Our bullet group
+  bullets = game.add.group();
+  bullets.enableBody = true;
+  bullets.physicsBodyType = Phaser.Physics.ARCADE;
+  bullets.createMultiple(30, 'bullet');
+  bullets.setAll('anchor.x', 0.5);
+  bullets.setAll('anchor.y', 1);
+  bullets.setAll('outOfBoundsKill', true);
+  bullets.setAll('checkWorldBounds', true);
 
-    // The enemy's bullets
-    enemyBullets = game.add.group();
-    enemyBullets.enableBody = true;
-    enemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
-    enemyBullets.createMultiple(30, 'enemyBullet');
-    enemyBullets.setAll('anchor.x', 0.5);
-    enemyBullets.setAll('anchor.y', 1);
-    enemyBullets.setAll('outOfBoundsKill', true);
-    enemyBullets.setAll('checkWorldBounds', true);
+  // The enemy's bullets
+  enemyBullets = game.add.group();
+  enemyBullets.enableBody = true;
+  enemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
+  enemyBullets.createMultiple(30, 'enemyBullet');
+  enemyBullets.setAll('anchor.x', 0.5);
+  enemyBullets.setAll('anchor.y', 1);
+  enemyBullets.setAll('outOfBoundsKill', true);
+  enemyBullets.setAll('checkWorldBounds', true);
 
-    //  The hero!
-    player = game.add.sprite(30, FLOOR_Y, 'flea');
-    player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
-    player.animations.add('idle', [7, 8, 9], 10, true);
-    player.animations.play('idle');
-    game.physics.enable(player, Phaser.Physics.ARCADE);
-    player.inAir = false;
+  //  The hero!
+  player = game.add.sprite(30, FLOOR_Y, 'flea');
+  player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
+  player.animations.add('idle', [7, 8, 9], 10, true);
+  player.animations.play('idle');
+  game.physics.enable(player, Phaser.Physics.ARCADE);
+  player.inAir = false;
 
-    //  The baddies!
-    aliens = game.add.group();
-    aliens.enableBody = true;
-    aliens.physicsBodyType = Phaser.Physics.ARCADE;
+  //  The baddies!
+  aliens = game.add.group();
+  aliens.enableBody = true;
+  aliens.physicsBodyType = Phaser.Physics.ARCADE;
 
-    //createAliens();
+  //createAliens();
 
-    explosionSnd = game.add.audio('explosion');
-    blasterSnd = game.add.audio('blaster');
+  explosionSnd = game.add.audio('explosion');
+  blasterSnd = game.add.audio('blaster');
 
-    //  An explosion pool
-    explosions = game.add.group();
-    explosions.createMultiple(30, 'kaboom');
-    explosions.forEach(setupInvader, this);
+  //  An explosion pool
+  explosions = game.add.group();
+  explosions.createMultiple(30, 'kaboom');
+  explosions.forEach(setupInvader, this);
 
-    //  And some controls to play the game with
-    cursors = game.input.keyboard.createCursorKeys();
-    fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-    
+  //  And some controls to play the game with
+  cursors = game.input.keyboard.createCursorKeys();
+  aButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+  
 }
 
 function createAliens () {
@@ -146,53 +152,106 @@ function descend() {
 
 }
 
+function setJumpTarget (x, y) {
+  if (!playerHasJumpTarget()) {
+    playerJumpTarget = game.add.sprite(x, y, 'jump_target');
+    game.physics.enable(playerJumpTarget, Phaser.Physics.ARCADE);
+    playerJumpTarget.animations.add('blink', [ 0, 1], 20, true);
+    playerJumpTarget.play('blink');
+  }
+  playerJumpTarget.x = x;
+  playerJumpTarget.y = y;
+}
+
+function playerHasJumpTarget () {
+  return null !== playerJumpTarget;
+}
+
+function deletePlayerJumpTarget () {
+  if (playerHasJumpTarget()) {
+    playerJumpTarget.destroy();
+    playerJumpTarget = null;
+  }
+}
+
 function update() {
   if (player.alive)
   {
     if (player.inAir) {
       player.body.gravity.y = PLAYER_GRAVITY;
-      if (player.body.y > FLOOR_Y) {
+      if (player.y > FLOOR_Y) {
         player.body.gravity.y = 0;
-        player.body.y = FLOOR_Y;
+        player.body.velocity.y = 0;
+        player.y = FLOOR_Y;
         player.inAir = false;
       }
     } else {
       player.body.gravity.y = 0;
-      player.body.y = FLOOR_Y;
+      player.y = FLOOR_Y;
     }
 
-    if (cursors.left.isDown && !cursors.right.isDown)
-    {
-      player.body.velocity.x = Math.max(-PLAYER_SPEED, player.body.velocity.x - PLAYER_ACCEL);
-    }
-    else if (cursors.right.isDown && !cursors.left.isDown)
-    {
-      player.body.velocity.x = Math.min(PLAYER_SPEED, player.body.velocity.x + PLAYER_ACCEL);
+    if (!playerHasJumpTarget()) {
+      if (!player.inAir) {
+        if (cursors.left.isDown && !cursors.right.isDown)
+        {
+          player.body.velocity.x = Math.max(-PLAYER_SPEED, player.body.velocity.x - PLAYER_ACCEL);
+        }
+        else if (cursors.right.isDown && !cursors.left.isDown)
+        {
+          player.body.velocity.x = Math.min(PLAYER_SPEED, player.body.velocity.x + PLAYER_ACCEL);
+        } else {
+          player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
+        }
+        if (aButton.isDown) {
+          setJumpTarget(player.x, player.y - 5);
+        }
+      }
     } else {
+      // targeting jump
       player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
-    }
-    if (!player.inAir && cursors.up.isDown) {
-      player.body.velocity.y = -200;
-      player.inAir = true;
-      player.animations.play("hop").onComplete.addOnce(function () {
-        player.animations.play("idle");
-      });
+      playerJumpTarget.body.velocity.x = playerJumpTarget.body.velocity.x * TARGET_FRIC;
+      playerJumpTarget.body.velocity.y = playerJumpTarget.body.velocity.y * TARGET_FRIC;
+      playerJumpTarget.body.velocity.y += (30 - playerJumpTarget.y);
+      playerJumpTarget.body.velocity.x += (80 - playerJumpTarget.x) / 3;
+      if (cursors.left.isDown && !cursors.right.isDown)
+      {
+        playerJumpTarget.body.velocity.x -= TARGET_ACCEL;
+      }
+      else if (cursors.right.isDown && !cursors.left.isDown)
+      {
+        playerJumpTarget.body.velocity.x += TARGET_ACCEL;
+      }
+      if (cursors.up.isDown && !cursors.down.isDown)
+      {
+        playerJumpTarget.body.velocity.y -= TARGET_ACCEL;
+      }
+      else if (cursors.down.isDown && !cursors.up.isDown)
+      {
+        playerJumpTarget.body.velocity.y += TARGET_ACCEL;
+      }
+      if (!aButton.isDown) {
+        player.body.velocity.y = (playerJumpTarget.y - player.y) * 4;
+        player.body.velocity.x = (playerJumpTarget.x - player.x) * 3;
+        deletePlayerJumpTarget();
+        player.inAir = true;
+        player.animations.play("hop").onComplete.addOnce(function () {
+          player.animations.play("idle");
+        });
+      }
     }
 
-    if (player.body.x < BOUND_X) {
-      player.body.x = BOUND_X;
+    if (player.x < BOUND_X) {
+      player.x = BOUND_X;
       player.body.velocity.x = Math.max(0, player.body.velocity.x);
-    } else if (player.body.x > 144 - BOUND_X) {
-      player.body.x = 144 - BOUND_X;
+    } else if (player.x > 144 - BOUND_X) {
+      player.x = 144 - BOUND_X;
       // want negative velocity
       player.body.velocity.x = Math.min(0, player.body.velocity.x);
     }
-
-    //  Firing?
-    if (fireButton.isDown)
-    {
-        fireBullet();
-    }
+    if (player.y > FLOOR_Y) {
+      player.y = FLOOR_Y;
+      player.body.velocity.y = Math.min(0, player.body.velocity.y);
+    } 
 
     if (game.time.now > firingTimer)
     {
