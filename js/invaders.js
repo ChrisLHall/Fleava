@@ -9,6 +9,7 @@ function preload() {
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
     game.load.spritesheet('flea', 'assets/img/flea.png', 16, 33);
+    game.load.spritesheet('pug', 'assets/img/dog_sheet_final.png', 97, 103);
     //game.load.spritesheet('flea_hop', 'assets/img/flea_small_hop.png', 16, 33);
     game.load.spritesheet('kaboom', 'assets/img/explode.png', 128, 128);
     game.load.image('midbg', 'assets/img/terrain1.png');
@@ -29,6 +30,8 @@ var TARGET_FRIC = 0.92;
 var FLOOR_Y = 76;
 var BOUND_X = 10;
 var playerJumpTarget = null;
+
+var pug;
 var aliens;
 var bullets;
 var bulletTime = 0;
@@ -85,6 +88,15 @@ function createPlatformZone () {
   enemyBullets.setAll('outOfBoundsKill', true);
   enemyBullets.setAll('checkWorldBounds', true);
 
+  pug = game.add.sprite(58, 6, 'pug');
+  pug.animations.add('enter', [0, 1, 2, 3, 4], 10, false);
+  pug.animations.add('exit', [4, 3, 2, 1, 0], 10, false);
+  pug.animations.add('idle', [5, 6, 7], 10, true);
+  pug.animations.add('lick', [8, 9, 10], 10, false);
+  pug.animations.add('slam', [8, 9, 10], 10, false);
+  pug.animations.play("enter").onComplete.addOnce(function () {
+    pug.animations.play("idle");
+  });
   //  The hero!
   player = game.add.sprite(30, FLOOR_Y, 'flea');
   player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
@@ -92,6 +104,7 @@ function createPlatformZone () {
   player.animations.play('idle');
   game.physics.enable(player, Phaser.Physics.ARCADE);
   player.inAir = false;
+
 
   //  The baddies!
   aliens = game.add.group();
