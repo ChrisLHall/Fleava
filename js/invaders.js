@@ -15,24 +15,27 @@ function preload() {
     game.load.image('midbg', 'assets/img/terrain1.png');
     game.load.image('bg', 'assets/img/background1.png');
     game.load.image('hud', 'assets/img/frame1.png');
+    game.load.spritesheet('hud_heart', 'assets/img/Health_Heart_sheet.png', 25, 20);
 
     game.load.audio('explosion', 'assets/sfx/explosion.mp3');
     game.load.audio('blaster', 'assets/sfx/blaster.mp3');
 }
 
 var player;
+var playerHealth;
 var PLAYER_SPEED = 150;
 var PLAYER_GRAVITY = 600;
 var PLAYER_ACCEL = 40;
 var TARGET_ACCEL = 20;
 var PLAYER_FRIC = 0.8;
 var TARGET_FRIC = 0.92;
-var FLOOR_Y = 76;
+var FLOOR_Y = 88;
 var CEIL_Y = 2;
 var BOUND_X = 10;
 var playerJumpTarget = null;
 
 var pug;
+var pugAlive = true;
 var POSSIBLE_TARGET_POS = [[100, 30], [80, 20]];
 var NUM_TARGETS = 3;
 var targetPositions = null;
@@ -73,6 +76,7 @@ var explosions;
 var bg;
 var midbg;
 var hud;
+var hudHeart;
 var score = 0;
 var scoreString = '';
 var enemyBullet;
@@ -109,10 +113,10 @@ function create() {
   midbg = game.add.sprite(0, 0, 'midbg');
   hud = game.add.sprite(0, 0, 'hud');
   pickTargets();
-  createPlatformZone();
+  createPlatformLevel();
 }
 
-function createPlatformZone () {
+function createPlatformLevel () {
 
   //  Our bullet group
   bullets = game.add.group();
@@ -135,25 +139,34 @@ function createPlatformZone () {
   enemyBullets.setAll('checkWorldBounds', true);
 
   pug = game.add.sprite(58, 6, 'pug');
-  pug.animations.add('enter', [0, 1, 2, 3, 4], 10, false);
-  pug.animations.add('exit', [4, 3, 2, 1, 0], 10, false);
+  pug.animations.add('enter', [0, 1, 2, 3, 4], 5, false);
+  pug.animations.add('exit', [4, 3, 2, 1, 0], 5, false);
   pug.animations.add('idle', [5, 6, 7], 10, true);
   pug.animations.add('lick', [8, 9, 10], 10, false);
-  pug.animations.add('slam', [8, 9, 10], 10, false);
+  pug.animations.add('slam', [11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 10, false);
   pug.animations.play("enter").onComplete.addOnce(function () {
     pug.animations.play("idle");
   });
+  setTimeout(pugAttack, 3000)
   
   instantiateTargets();
   
+  hudHeart = game.add.sprite(80, 137, 'hud_heart');
+  hudHeart.anchor.setTo(0.5, 1.0);
+  hudHeart.animations.add('default', null, 0, false);
+  hudHeart.animations.play('default');
   //  The hero!
   player = game.add.sprite(30, FLOOR_Y, 'flea');
   player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
   player.animations.add('idle', [7, 8, 9], 10, true);
   player.animations.play('idle');
+  player.anchor.setTo(0.5, 0.5);
   game.physics.enable(player, Phaser.Physics.ARCADE);
   player.inAir = false;
-
+  playerHealth = 17;
+  setPlayerHealth(playerHealth);
+  // TODO REMOVE
+  setInterval(function () {setPlayerHealth(playerHealth - 1)}, 1000)
 
   //  The baddies!
   aliens = game.add.group();
@@ -238,10 +251,26 @@ function explodeTarget (target) {
   target.kill();
 }
 
-function descend() {
+function pugAttack() {
+  if (!pugAlive) {
+    return;
+  }
+  if (Math.random() < 0.5) {
+    pug.animations.play('slam').onComplete.addOnce(function () {
+      pug.animations.play("idle");
+    });
+  } else {
+    pug.animations.play('lick').onComplete.addOnce(function () {
+      pug.animations.play("idle");
+    });
+  }
+  setTimeout(pugAttack, 2000 + 1000 * Math.random());
+}
 
-    aliens.y += 10;
-
+function setPlayerHealth (health) {
+  playerHealth = health;
+  hudHeart.frame = 17 - health;
+  hudHeart.pause = true;
 }
 
 function setJumpTarget (x, y) {
@@ -359,6 +388,9 @@ function render() {
 
 var grabbedTarget = false;
 function grabTargetHandler (player, pugTarget) {
+  if (Math.abs(player.x - pugTarget.x) > 8 || Math.abs(player.y - pugTarget.y) > 9) {
+    return;
+  }
   if (grabbedTarget) {
     return;
   }
@@ -366,7 +398,8 @@ function grabTargetHandler (player, pugTarget) {
   explodeTarget(pugTarget);
   if (pugTargets.countLiving() === 0) {
     pugTargets.callAll('kill',this);
-
+    pug.animations.play('exit', null, false, true)
+    pugAlive = false;
     //the "click to restart" handler
     game.input.onTap.addOnce(restart,this);
   }
