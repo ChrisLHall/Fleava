@@ -2,9 +2,9 @@
 var game = new Phaser.Game(160, 144, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
-
     game.load.image('bullet', 'assets/img/bullet.png');
     game.load.spritesheet('jump_target', 'assets/img/target.png', 18, 19);
+    game.load.spritesheet('pug_target', 'assets/img/weak_point.png', 16, 15);
     game.load.image('enemyBullet', 'assets/img/enemy-bullet.png');
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
@@ -28,15 +28,47 @@ var TARGET_ACCEL = 20;
 var PLAYER_FRIC = 0.8;
 var TARGET_FRIC = 0.92;
 var FLOOR_Y = 76;
+var CEIL_Y = 2;
 var BOUND_X = 10;
 var playerJumpTarget = null;
 
 var pug;
+var POSSIBLE_TARGET_POS = [[100, 30], [80, 20]];
+var NUM_TARGETS = 3;
+var targetPositions = null;
+var pugTargets;
+
+function pickTargets () {
+  if (targetPositions !== null) {
+    return;
+  }
+  targetPositions = []
+  var count = Math.min(NUM_TARGETS, POSSIBLE_TARGET_POS.length)
+  for (var i = 0; i < count; i += 1) {
+    var targetPosIndex = getRandomInt(0, POSSIBLE_TARGET_POS.length)
+    targetPositions.push(POSSIBLE_TARGET_POS[targetPosIndex])
+    POSSIBLE_TARGET_POS.splice(targetPosIndex, 1)
+  }
+}
+
+function instantiateTargets () {
+  pugTargets = game.add.group();
+  pugTargets.enableBody = true;
+  pugTargets.physicsBodyType = Phaser.Physics.ARCADE;
+  //pugTargets.createMultiple(targetPositions.length, 'pug_target');
+  for (var i = 0; i < targetPositions.length; i++){
+    var targ = pugTargets.create(targetPositions[i][0], targetPositions[i][1],
+        'pug_target');
+    targ.anchor.setTo(0.5, 0.5);
+    targ.animations.add('idle', null, 10, true);
+    targ.play('idle');
+    targ.body.moves = false;
+  }
+}
+
 var aliens;
 var bullets;
 var bulletTime = 0;
-var cursors;
-var aButton;
 var explosions;
 var bg;
 var midbg;
@@ -50,7 +82,20 @@ var livingEnemies = [];
 var explosionSnd;
 var blasterSnd;
 
+var cursors;
+var aButton;
+var bButton;
+
 function create() {
+  //  And some controls to play the game with
+  cursors = game.input.keyboard.createCursorKeys();
+  aButton = game.input.keyboard.addKey(Phaser.KeyCode.Z);
+  aButton.onDown.add(pressedA);
+  aButton.onUp.add(releasedA);
+  bButton = game.input.keyboard.addKey(Phaser.KeyCode.X);
+  bButton.onDown.add(pressedB);
+  bButton.onUp.add(releasedB);
+  
   // scale the game 4x
   game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;  
   game.scale.setUserScale(3, 3);
@@ -63,6 +108,7 @@ function create() {
   bg = game.add.sprite(0, 0, 'bg');
   midbg = game.add.sprite(0, 0, 'midbg');
   hud = game.add.sprite(0, 0, 'hud');
+  pickTargets();
   createPlatformZone();
 }
 
@@ -97,6 +143,9 @@ function createPlatformZone () {
   pug.animations.play("enter").onComplete.addOnce(function () {
     pug.animations.play("idle");
   });
+  
+  instantiateTargets();
+  
   //  The hero!
   player = game.add.sprite(30, FLOOR_Y, 'flea');
   player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
@@ -119,12 +168,7 @@ function createPlatformZone () {
   //  An explosion pool
   explosions = game.add.group();
   explosions.createMultiple(30, 'kaboom');
-  explosions.forEach(setupInvader, this);
-
-  //  And some controls to play the game with
-  cursors = game.input.keyboard.createCursorKeys();
-  aButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-  
+  explosions.forEach(setupExplosion, this);  
 }
 
 function createAliens () {
@@ -151,12 +195,47 @@ function createAliens () {
     tween.onLoop.add(descend, this);
 }
 
-function setupInvader (invader) {
+function setupExplosion (exp) {
 
-    invader.anchor.x = 0.5;
-    invader.anchor.y = 0.5;
-    invader.animations.add('kaboom');
+    exp.anchor.x = 0.5;
+    exp.anchor.y = 0.5;
+    exp.animations.add('kaboom');
 
+}
+
+function pressedA (key) {
+  if (!playerHasJumpTarget() && !player.inAir) {
+    setJumpTarget(player.x, player.y - 5);
+  }
+}
+
+function pressedB (key) {
+  game.physics.arcade.overlap(player, pugTargets, grabTargetHandler, null, this);
+}
+
+function releasedA (key) {
+  if (playerHasJumpTarget()) {
+    player.body.velocity.y = (playerJumpTarget.y - player.y) * 4;
+    player.body.velocity.x = (playerJumpTarget.x - player.x) * 3;
+    deletePlayerJumpTarget();
+    player.inAir = true;
+    player.animations.play("hop").onComplete.addOnce(function () {
+      player.animations.play("idle");
+    });
+  }
+}
+
+function releasedB (key) {
+  grabbedTarget = false;
+}
+
+function explodeTarget (target) {
+  //  And create an explosion :)
+  var explosion = explosions.getFirstExists(false);
+  explosion.reset(target.x, target.y);
+  explosion.play('kaboom', 30, false, true);
+  explosionSnd.play();
+  target.kill();
 }
 
 function descend() {
@@ -215,9 +294,6 @@ function update() {
         } else {
           player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
         }
-        if (aButton.isDown) {
-          setJumpTarget(player.x, player.y - 5);
-        }
       }
     } else {
       // targeting jump
@@ -242,15 +318,6 @@ function update() {
       {
         playerJumpTarget.body.velocity.y += TARGET_ACCEL;
       }
-      if (!aButton.isDown) {
-        player.body.velocity.y = (playerJumpTarget.y - player.y) * 4;
-        player.body.velocity.x = (playerJumpTarget.x - player.x) * 3;
-        deletePlayerJumpTarget();
-        player.inAir = true;
-        player.animations.play("hop").onComplete.addOnce(function () {
-          player.animations.play("idle");
-        });
-      }
     }
 
     if (player.x < BOUND_X) {
@@ -264,7 +331,10 @@ function update() {
     if (player.y > FLOOR_Y) {
       player.y = FLOOR_Y;
       player.body.velocity.y = Math.min(0, player.body.velocity.y);
-    } 
+    } else if (player.y < CEIL_Y) {
+      player.y = CEIL_Y;
+      player.body.velocity.y = Math.max(0, player.body.velocity.y);
+    }
 
     if (game.time.now > firingTimer)
     {
@@ -285,6 +355,21 @@ function render() {
     //     game.debug.body(aliens.children[i]);
     // }
 
+}
+
+var grabbedTarget = false;
+function grabTargetHandler (player, pugTarget) {
+  if (grabbedTarget) {
+    return;
+  }
+  grabbedTarget = true;
+  explodeTarget(pugTarget);
+  if (pugTargets.countLiving() === 0) {
+    pugTargets.callAll('kill',this);
+
+    //the "click to restart" handler
+    game.input.onTap.addOnce(restart,this);
+  }
 }
 
 function collisionHandler (bullet, alien) {
