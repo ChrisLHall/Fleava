@@ -6,6 +6,7 @@ function preload() {
     game.load.spritesheet('jump_target', 'assets/img/target.png', 18, 19);
     game.load.spritesheet('pug_target', 'assets/img/weak_point.png', 16, 15);
     game.load.image('enemyBullet', 'assets/img/enemy-bullet.png');
+    game.load.spritesheet('pug_projectile', 'assets/img/projectile_sheet.png', 23, 22);
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
     game.load.spritesheet('flea', 'assets/img/flea.png', 16, 33);
@@ -29,8 +30,8 @@ var PLAYER_ACCEL = 40;
 var TARGET_ACCEL = 20;
 var PLAYER_FRIC = 0.8;
 var TARGET_FRIC = 0.92;
-var FLOOR_Y = 88;
-var CEIL_Y = 2;
+var FLOOR_Y = 97;
+var CEIL_Y = 6;
 var BOUND_X = 10;
 var playerJumpTarget = null;
 
@@ -127,17 +128,7 @@ function createPlatformLevel () {
   bullets.setAll('anchor.y', 1);
   bullets.setAll('outOfBoundsKill', true);
   bullets.setAll('checkWorldBounds', true);
-
-  // The enemy's bullets
-  enemyBullets = game.add.group();
-  enemyBullets.enableBody = true;
-  enemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
-  enemyBullets.createMultiple(30, 'enemyBullet');
-  enemyBullets.setAll('anchor.x', 0.5);
-  enemyBullets.setAll('anchor.y', 1);
-  enemyBullets.setAll('outOfBoundsKill', true);
-  enemyBullets.setAll('checkWorldBounds', true);
-
+  
   pug = game.add.sprite(58, 6, 'pug');
   pug.animations.add('enter', [0, 1, 2, 3, 4], 5, false);
   pug.animations.add('exit', [4, 3, 2, 1, 0], 5, false);
@@ -148,25 +139,35 @@ function createPlatformLevel () {
     pug.animations.play("idle");
   });
   setTimeout(pugAttack, 3000)
+
+  // The enemy's bullets
+  enemyBullets = game.add.group();
+  enemyBullets.enableBody = true;
+  enemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
+  enemyBullets.createMultiple(30, 'pug_projectile');
+  enemyBullets.setAll('anchor.x', 0.5);
+  enemyBullets.setAll('anchor.y', 1);
+  enemyBullets.setAll('outOfBoundsKill', true);
+  enemyBullets.setAll('checkWorldBounds', true);
+
   
   instantiateTargets();
   
   hudHeart = game.add.sprite(80, 137, 'hud_heart');
   hudHeart.anchor.setTo(0.5, 1.0);
   hudHeart.animations.add('default', null, 0, false);
-  hudHeart.animations.play('default');
+  hudHeart.animations.stop();
+  hudHeart.animations.frame = 0;
   //  The hero!
   player = game.add.sprite(30, FLOOR_Y, 'flea');
   player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
   player.animations.add('idle', [7, 8, 9], 10, true);
   player.animations.play('idle');
-  player.anchor.setTo(0.5, 0.5);
+  player.anchor.setTo(0.5, 0.75);
   game.physics.enable(player, Phaser.Physics.ARCADE);
   player.inAir = false;
   playerHealth = 17;
   setPlayerHealth(playerHealth);
-  // TODO REMOVE
-  setInterval(function () {setPlayerHealth(playerHealth - 1)}, 1000)
 
   //  The baddies!
   aliens = game.add.group();
@@ -259,10 +260,12 @@ function pugAttack() {
     pug.animations.play('slam').onComplete.addOnce(function () {
       pug.animations.play("idle");
     });
+    enemyFires(true);
   } else {
     pug.animations.play('lick').onComplete.addOnce(function () {
       pug.animations.play("idle");
     });
+    enemyFires(false);
   }
   setTimeout(pugAttack, 2000 + 1000 * Math.random());
 }
@@ -364,14 +367,7 @@ function update() {
       player.y = CEIL_Y;
       player.body.velocity.y = Math.max(0, player.body.velocity.y);
     }
-
-    if (game.time.now > firingTimer)
-    {
-        enemyFires();
-    }
-
     //  Run collision
-    game.physics.arcade.overlap(bullets, aliens, collisionHandler, null, this);
     game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer, null, this);
   }
 
@@ -388,7 +384,7 @@ function render() {
 
 var grabbedTarget = false;
 function grabTargetHandler (player, pugTarget) {
-  if (Math.abs(player.x - pugTarget.x) > 8 || Math.abs(player.y - pugTarget.y) > 9) {
+  if (Math.abs(player.x - pugTarget.x) > 12 || Math.abs(player.y - pugTarget.y) > 12) {
     return;
   }
   if (grabbedTarget) {
@@ -432,51 +428,38 @@ function collisionHandler (bullet, alien) {
 }
 
 function enemyHitsPlayer (player,bullet) {
-    
+  if (Math.abs(player.x - bullet.x) > 12 || Math.abs(player.y - bullet.y) > 12) {
+    return;
+  }
     bullet.kill();
-
-    if (live)
-    {
-        live.kill();
-    }
-
+    setPlayerHealth(playerHealth - 1);
     //  And create an explosion :)
     var explosion = explosions.getFirstExists(false);
-    explosion.reset(player.body.x, player.body.y);
+    explosion.reset(player.x, player.y);
     explosion.play('kaboom', 30, false, true);
 
     
 
 }
 
-function enemyFires () {
+var ENEMY_LEFT_SPOT = {x: 100, y: 100};
+var ENEMY_DOWN_SPOT = {x: 90, y: 20};
+function enemyFires (left) {
 
-    //  Grab the first bullet we can from the pool
-    enemyBullet = enemyBullets.getFirstExists(false);
-
-    livingEnemies.length=0;
-
-    aliens.forEachAlive(function(alien){
-
-        // put every living enemy in an array
-        livingEnemies.push(alien);
-    });
-
-
-    if (enemyBullet && livingEnemies.length > 0)
-    {
-        
-        var random=game.rnd.integerInRange(0,livingEnemies.length-1);
-
-        // randomly select one of them
-        var shooter=livingEnemies[random];
-        // And fire the bullet from this enemy
-        enemyBullet.reset(shooter.body.x, shooter.body.y);
-
-        game.physics.arcade.moveToObject(enemyBullet,player,120);
-        firingTimer = game.time.now + 2000;
-    }
-
+  //  Grab the first bullet we can from the pool
+  enemyBullet = enemyBullets.getFirstExists(false);
+  enemyBullet.animations.add('left', [0], 10, true);
+  enemyBullet.animations.add('down', [1], 10, true);
+  enemyBullet.animations.add('pop', [1], 10, false);
+  if (left) {
+    enemyBullet.reset(ENEMY_LEFT_SPOT.x, ENEMY_LEFT_SPOT.y);
+    enemyBullet.animations.play("left");
+    enemyBullet.body.velocity.x = -50;
+  } else {
+    enemyBullet.animations.play("down");
+    enemyBullet.reset(ENEMY_DOWN_SPOT.x, ENEMY_DOWN_SPOT.y);
+    enemyBullet.body.velocity.y = 50;
+  }
 }
 
 function fireBullet () {
