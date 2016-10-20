@@ -9,7 +9,7 @@ function preload() {
     game.load.spritesheet('pug_projectile', 'assets/img/projectile_sheet.png', 23, 22);
     game.load.spritesheet('invader', 'assets/img/invader32x32x4.png', 32, 32);
     game.load.image('ship', 'assets/img/player.png');
-    game.load.spritesheet('flea', 'assets/img/flea.png', 16, 33);
+    game.load.spritesheet('flea', 'assets/img/flea_small.png', 16, 33);
     game.load.spritesheet('pug', 'assets/img/dog_sheet_final.png', 97, 103);
     //game.load.spritesheet('flea_hop', 'assets/img/flea_small_hop.png', 16, 33);
     game.load.spritesheet('kaboom', 'assets/img/explode.png', 128, 128);
@@ -160,8 +160,13 @@ function createPlatformLevel () {
   hudHeart.animations.frame = 0;
   //  The hero!
   player = game.add.sprite(30, FLOOR_Y, 'flea');
-  player.animations.add('hop', [0, 1, 2, 3, 4, 5, 6], 10, false);
-  player.animations.add('idle', [7, 8, 9], 10, true);
+  player.animations.add('idle', [0, 1, 2], 10, true);
+  player.animations.add('walk', [3, 4, 5, 6, 7, 8, 9], 10, true);
+  player.animations.add('hop_charge', [18, 19, 20], 10, true);
+  player.animations.add('hop_start', [10, 11, 12], 10, false);
+  player.animations.add('hop_loop', [13, 14], 10, true);
+  player.animations.add('hop_end', [15, 16, 17], 10, false);
+  player.animations.add('hit', [21, 22, 23, 24, 25, 26, 27, 28, 29], 10, false);
   player.animations.play('idle');
   player.anchor.setTo(0.5, 0.75);
   game.physics.enable(player, Phaser.Physics.ARCADE);
@@ -220,6 +225,7 @@ function setupExplosion (exp) {
 function pressedA (key) {
   if (!playerHasJumpTarget() && !player.inAir) {
     setJumpTarget(player.x, player.y - 5);
+    player.animations.play("hop_charge");
   }
 }
 
@@ -233,8 +239,8 @@ function releasedA (key) {
     player.body.velocity.x = (playerJumpTarget.x - player.x) * 3;
     deletePlayerJumpTarget();
     player.inAir = true;
-    player.animations.play("hop").onComplete.addOnce(function () {
-      player.animations.play("idle");
+    player.animations.play("hop_start").onComplete.addOnce(function () {
+      player.animations.play("hop_loop");
     });
   }
 }
@@ -308,6 +314,9 @@ function update() {
         player.body.velocity.y = 0;
         player.y = FLOOR_Y;
         player.inAir = false;
+        player.animations.play("hop_end").onComplete.addOnce(function () {
+          player.animations.play("idle");
+        });
       }
     } else {
       player.body.gravity.y = 0;
@@ -431,15 +440,11 @@ function enemyHitsPlayer (player,bullet) {
   if (Math.abs(player.x - bullet.x) > 12 || Math.abs(player.y - bullet.y) > 12) {
     return;
   }
-    bullet.kill();
-    setPlayerHealth(playerHealth - 1);
-    //  And create an explosion :)
-    var explosion = explosions.getFirstExists(false);
-    explosion.reset(player.x, player.y);
-    explosion.play('kaboom', 30, false, true);
-
-    
-
+  bullet.kill();
+  setPlayerHealth(playerHealth - 1);
+  player.animations.play("hit").onComplete.addOnce(function () {
+    player.animations.play("idle");
+  });
 }
 
 var ENEMY_LEFT_SPOT = {x: 100, y: 100};
