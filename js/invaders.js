@@ -2,6 +2,8 @@
 var game = new Phaser.Game(160, 144, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
+    game.load.spritesheet('title', 'assets/img/title_screen_sheet.png', 160, 144);
+    
     game.load.image('bullet', 'assets/img/bullet.png');
     game.load.spritesheet('jump_target', 'assets/img/target.png', 18, 19);
     game.load.spritesheet('pug_target', 'assets/img/weak_point.png', 16, 15);
@@ -11,7 +13,6 @@ function preload() {
     game.load.image('ship', 'assets/img/player.png');
     game.load.spritesheet('flea', 'assets/img/flea_small.png', 16, 33);
     game.load.spritesheet('pug', 'assets/img/dog_sheet_final.png', 97, 103);
-    game.load.spritesheet('flea_big', 'assets/img/flea_big.png', 160, 144);
     //game.load.spritesheet('flea_hop', 'assets/img/flea_small_hop.png', 16, 33);
     game.load.spritesheet('kaboom', 'assets/img/explode.png', 128, 128);
     game.load.image('midbg', 'assets/img/terrain1.png');
@@ -73,6 +74,13 @@ function instantiateTargets () {
   }
 }
 
+var whichScene;
+var SCENE_TITLE = 1;
+var SCENE_PLATFORM = 2;
+var SCENE_FIGHT = 3;
+
+var titleScreen;
+
 var bigPlayer;
 var bigAttackAmt;
 var bigAttackHud;
@@ -125,7 +133,7 @@ function create() {
   blasterSnd = game.add.audio('blaster');
   
   pickTargets();
-  createPlatformLevel();
+  createTitleScreen();
 }
 
 function unloadLevel () {
@@ -134,8 +142,22 @@ function unloadLevel () {
   clearTimeout(stopPunchingTimeout);
 }
 
+function createTitleScreen () {
+  unloadLevel();
+  whichScene = SCENE_TITLE;
+  
+  titleScreen = game.add.sprite(0, 0, 'title');
+  titleScreen.animations.add('enter', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 10, false);
+  titleScreen.animations.add('idle', [17, 18, 19], 10, true); 
+  titleScreen.animations.play("enter").onComplete.addOnce(function () {
+    titleScreen.animations.play("idle");
+  });
+}
+
 function createPlatformLevel () {
   unloadLevel();
+  whichScene = SCENE_PLATFORM;
+  
   bg = game.add.sprite(0, 0, 'bg');
   midbg = game.add.sprite(0, 0, 'midbg');
   hud = game.add.sprite(0, 0, 'hud');
@@ -203,6 +225,8 @@ function createPlatformLevel () {
 
 function createFightLevel () {
   unloadLevel();
+  whichScene = SCENE_FIGHT;
+  
   bigPlayer = game.add.sprite(0, 0, 'flea_big');
   bigPlayer.animations.add('idle', [0, 1, 2, 3, 4, 5, 6], 10, true);
   bigPlayer.animations.add('punch', [7, 8, 9, 10, 11, 12, 13], 10, true);
@@ -276,12 +300,16 @@ function releasedA (key) {
         player.animations.play("hop_loop");
       });
     }
+  } else if (whichScene == SCENE_TITLE) {
+    createPlatformLevel();
   }
 }
 
 function releasedB (key) {
   if (null != player && player.alive) {
     grabbedTarget = false;
+  } else if (whichScene == SCENE_TITLE) {
+    createPlatformLevel();
   }
 }
 
@@ -302,7 +330,15 @@ function explodeTarget (target) {
 }
 
 function pugAttack() {
+  if (pugTargets.countLiving() === 0) {
+    pugTargets.callAll('kill',this);
+    pug.animations.play('exit', null, false, true)
+    pugAlive = false;
+    //the "click to restart" handler
+    game.input.onTap.addOnce(restart,this);
+  }
   if (!pugAlive) {
+    console.log("pug is not alive!");
     return;
   }
   if (Math.random() < 0.5) {
@@ -316,7 +352,7 @@ function pugAttack() {
     });
     enemyFires(false);
   }
-  setTimeout(pugAttack, 2000 + 1000 * Math.random());
+  pugAttackTimeout = setTimeout(pugAttack, 2000 + 1000 * Math.random());
 }
 
 function setPlayerHealth (health) {
@@ -462,13 +498,6 @@ function grabTargetHandler (player, pugTarget) {
   }
   grabbedTarget = true;
   explodeTarget(pugTarget);
-  if (pugTargets.countLiving() === 0) {
-    pugTargets.callAll('kill',this);
-    pug.animations.play('exit', null, false, true)
-    pugAlive = false;
-    //the "click to restart" handler
-    game.input.onTap.addOnce(restart,this);
-  }
 }
 
 function enemyHitsPlayer (player,bullet) {
