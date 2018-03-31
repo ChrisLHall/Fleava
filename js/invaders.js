@@ -3,7 +3,7 @@ var game = new Phaser.Game(160, 144, Phaser.AUTO, 'phaser-example', { preload: p
 
 function preload() {
     game.load.spritesheet('title', 'assets/img/title_screen_sheet.png', 160, 144);
-    
+
     game.load.image('bullet', 'assets/img/bullet.png');
     game.load.spritesheet('jump_target', 'assets/img/target.png', 18, 19);
     game.load.spritesheet('pug_target', 'assets/img/weak_point.png', 16, 15);
@@ -45,6 +45,8 @@ var POSSIBLE_TARGET_POS = [[100, 30], [80, 20]];
 var NUM_TARGETS = 3;
 var targetPositions = null;
 var pugTargets;
+
+var pointerTargetting = false;
 
 function pickTargets () {
   if (targetPositions !== null) {
@@ -118,20 +120,25 @@ function create() {
   bButton = game.input.keyboard.addKey(Phaser.KeyCode.X);
   bButton.onDown.add(pressedB);
   bButton.onUp.add(releasedB);
-  
+  // set max pointers to 1
+  pointer = game.input.maxPointers = 1
+  //pointer setup
+  game.input.onDown.add(beginPointerTarget);
+  game.input.onUp.add(releasedA);
+
   // scale the game 4x
-  game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;  
+  game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;
   game.scale.setUserScale(3, 3);
 
   // enable crisp rendering
-  game.renderer.renderSession.roundPixels = true;  
+  game.renderer.renderSession.roundPixels = true;
   Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
 
   game.physics.startSystem(Phaser.Physics.ARCADE);
-  
+
   explosionSnd = game.add.audio('explosion');
   blasterSnd = game.add.audio('blaster');
-  
+
   pickTargets();
   createTitleScreen();
 }
@@ -145,10 +152,10 @@ function unloadLevel () {
 function createTitleScreen () {
   unloadLevel();
   whichScene = SCENE_TITLE;
-  
+
   titleScreen = game.add.sprite(0, 0, 'title');
   titleScreen.animations.add('enter', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 10, false);
-  titleScreen.animations.add('idle', [17, 18, 19], 10, true); 
+  titleScreen.animations.add('idle', [17, 18, 19], 10, true);
   titleScreen.animations.play("enter").onComplete.addOnce(function () {
     titleScreen.animations.play("idle");
   });
@@ -157,7 +164,7 @@ function createTitleScreen () {
 function createPlatformLevel () {
   unloadLevel();
   whichScene = SCENE_PLATFORM;
-  
+
   bg = game.add.sprite(0, 0, 'bg');
   midbg = game.add.sprite(0, 0, 'midbg');
   hud = game.add.sprite(0, 0, 'hud');
@@ -171,7 +178,7 @@ function createPlatformLevel () {
   bullets.setAll('anchor.y', 1);
   bullets.setAll('outOfBoundsKill', true);
   bullets.setAll('checkWorldBounds', true);
-  
+
   pug = game.add.sprite(58, 6, 'pug');
   pug.animations.add('enter', [0, 1, 2, 3, 4], 5, false);
   pug.animations.add('exit', [4, 3, 2, 1, 0], 5, false);
@@ -193,9 +200,9 @@ function createPlatformLevel () {
   enemyBullets.setAll('outOfBoundsKill', true);
   enemyBullets.setAll('checkWorldBounds', true);
 
-  
+
   instantiateTargets();
-  
+
   hudHeart = game.add.sprite(80, 137, 'hud_heart');
   hudHeart.anchor.setTo(0.5, 1.0);
   hudHeart.animations.add('default', null, 0, false);
@@ -220,20 +227,20 @@ function createPlatformLevel () {
   //  An explosion pool
   explosions = game.add.group();
   explosions.createMultiple(30, 'kaboom');
-  explosions.forEach(setupExplosion, this);  
+  explosions.forEach(setupExplosion, this);
 }
 
 function createFightLevel () {
   unloadLevel();
   whichScene = SCENE_FIGHT;
-  
+
   bigPlayer = game.add.sprite(0, 0, 'flea_big');
   bigPlayer.animations.add('idle', [0, 1, 2, 3, 4, 5, 6], 10, true);
   bigPlayer.animations.add('punch', [7, 8, 9, 10, 11, 12, 13], 10, true);
   bigPlayer.animations.play('idle');
-  
+
   hud = game.add.sprite(0, 0, 'hud');
-  
+
   bigAttackHud = game.add.sprite(10, 122, 'hud2_meter'); // frames 0-14 are for attack meter
   bigAttackHud.animations.add('default', null, 0, false);
   bigAttackHud.animations.stop();
@@ -253,6 +260,7 @@ function setupExplosion (exp) {
 function pressedA (key) {
   if (null != player && player.alive) {
     if (!playerHasJumpTarget() && !player.inAir) {
+      pointerTargetting = false;
       setJumpTarget(player.x, player.y - 5);
       player.animations.play("hop_charge");
     }
@@ -267,6 +275,16 @@ function pressedA (key) {
       stopPunchingTimeout = setTimeout(stopPunching, 500);
       lastPunchPressed = 'a';
       setBigAttackAmt(bigAttackAmt + 1);
+    }
+  }
+}
+
+function beginPointerTarget() {
+  if (null != player && player.alive) {
+    if (!playerHasJumpTarget() && !player.inAir) {
+      pointerTargetting = true;
+      setJumpTarget(game.input.activePointer.x, game.input.activePointer.y);
+      player.animations.play("hop_charge");
     }
   }
 }
@@ -368,8 +386,8 @@ function setJumpTarget (x, y) {
     playerJumpTarget.animations.add('blink', [ 0, 1], 20, true);
     playerJumpTarget.play('blink');
   }
-  playerJumpTarget.x = x;
-  playerJumpTarget.y = y;
+  playerJumpTarget.x = x - (playerJumpTarget.width * 0.5);
+  playerJumpTarget.y = y - (playerJumpTarget.height * 0.5);
 }
 
 function playerHasJumpTarget () {
@@ -432,26 +450,28 @@ function update() {
       }
     } else {
       // targeting jump
-      player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
-      playerJumpTarget.body.velocity.x = playerJumpTarget.body.velocity.x * TARGET_FRIC;
-      playerJumpTarget.body.velocity.y = playerJumpTarget.body.velocity.y * TARGET_FRIC;
-      playerJumpTarget.body.velocity.y += (30 - playerJumpTarget.y);
-      playerJumpTarget.body.velocity.x += (80 - playerJumpTarget.x) / 3;
-      if (cursors.left.isDown && !cursors.right.isDown)
-      {
-        playerJumpTarget.body.velocity.x -= TARGET_ACCEL;
-      }
-      else if (cursors.right.isDown && !cursors.left.isDown)
-      {
-        playerJumpTarget.body.velocity.x += TARGET_ACCEL;
-      }
-      if (cursors.up.isDown && !cursors.down.isDown)
-      {
-        playerJumpTarget.body.velocity.y -= TARGET_ACCEL;
-      }
-      else if (cursors.down.isDown && !cursors.up.isDown)
-      {
-        playerJumpTarget.body.velocity.y += TARGET_ACCEL;
+      if (!pointerTargetting) {
+        player.body.velocity.x = player.body.velocity.x * PLAYER_FRIC;
+        playerJumpTarget.body.velocity.x = playerJumpTarget.body.velocity.x * TARGET_FRIC;
+        playerJumpTarget.body.velocity.y = playerJumpTarget.body.velocity.y * TARGET_FRIC;
+        playerJumpTarget.body.velocity.y += (30 - playerJumpTarget.y);
+        playerJumpTarget.body.velocity.x += (80 - playerJumpTarget.x) / 3;
+        if (cursors.left.isDown && !cursors.right.isDown)
+        {
+          playerJumpTarget.body.velocity.x -= TARGET_ACCEL;
+        }
+        else if (cursors.right.isDown && !cursors.left.isDown)
+        {
+          playerJumpTarget.body.velocity.x += TARGET_ACCEL;
+        }
+        if (cursors.up.isDown && !cursors.down.isDown)
+        {
+          playerJumpTarget.body.velocity.y -= TARGET_ACCEL;
+        }
+        else if (cursors.down.isDown && !cursors.up.isDown)
+        {
+          playerJumpTarget.body.velocity.y += TARGET_ACCEL;
+        }
       }
     }
 
@@ -473,9 +493,9 @@ function update() {
     //  Run collision
     game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer, null, this);
   }
-  
+
   if (null != bigPlayer && bigPlayer.alive) {
-    
+
   }
 }
 

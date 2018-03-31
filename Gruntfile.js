@@ -52,12 +52,11 @@ module.exports = function(grunt) {
         }
       }
     },
-    // DON'T USE THIS PLZ
     connect: {
       server: {
         options: {
           base: 'build',
-          port: 80,
+          port: 8080,
           keepalive: true
         }
       }
