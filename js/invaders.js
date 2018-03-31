@@ -123,7 +123,7 @@ function create() {
   // set max pointers to 1
   pointer = game.input.maxPointers = 1
   //pointer setup
-  game.input.onDown.add(beginPointerTarget);
+  game.input.onDown.add(onPointerDown);
   game.input.onUp.add(releasedA);
 
   // scale the game 4x
@@ -279,15 +279,28 @@ function pressedA (key) {
   }
 }
 
-function beginPointerTarget() {
+function onPointerDown() {
+  //For jumping onto the pug
   if (null != player && player.alive) {
     if (!playerHasJumpTarget() && !player.inAir) {
       pointerTargetting = true;
       setJumpTarget(game.input.activePointer.x, game.input.activePointer.y);
       player.animations.play("hop_charge");
     }
+    game.physics.arcade.overlap(player, pugTargets, grabTargetHandler, null, this);
+  }
+  //handles double tapping
+  if (null != bigPlayer && bigPlayer.alive) {
+    if (null != stopPunchingTimeout) {
+      clearTimeout(stopPunchingTimeout);
+    } else {
+      bigPlayer.animations.play('punch');
+    }
+    stopPunchingTimeout = setTimeout(stopPunching, 500);
+    setBigAttackAmt(bigAttackAmt + 1);
   }
 }
+
 
 function pressedB (key) {
   if (null != player && player.alive) {
